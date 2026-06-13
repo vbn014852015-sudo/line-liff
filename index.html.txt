@@ -1,0 +1,45 @@
+function searchProduct(barcode) {
+  fetch(`${GAS_URL}?action=search&barcode=${barcode}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        currentProduct = data;
+        currentProduct.barcode = barcode;
+        
+        if (data.isNew) {
+          // 💡 新商品的畫面：名稱、成本、售價都變成可輸入的 <input> 框
+          document.getElementById("pName").innerHTML = `名稱：<input type="text" id="editName" value="${data.name}">`;
+          document.getElementById("pCost").innerHTML = `成本：$<input type="number" id="editCost" value="0">`;
+          document.getElementById("pPrice").innerHTML = `售價：$<input type="number" id="editPrice" value="${data.price}">`;
+          document.getElementById("pStock").innerText = "目前庫存：0 (全新建檔)";
+          
+          // 下方的按鈕變成一個【確認建檔】按鈕
+          document.getElementById("btnArea").innerHTML = `
+            <label>初始入庫量：</label><input type="number" id="qty" value="1"><br><br>
+            <button onclick="createNewProduct()" style="background-color: #06C755;">💾 確認全新建檔並入庫</button>
+          `;
+        } else {
+          // 舊商品的畫面：維持原本唯讀顯示，並提供「➕入庫」與「➖出庫」按鈕
+          // ... (維持前一次對話提供的唯讀顯示與按鈕邏輯) ...
+        }
+        document.getElementById("resultCard").style.display = "block";
+      }
+    });
+}
+
+// 呼叫全新的建檔 API
+function createNewProduct() {
+  const name = document.getElementById("editName").value;
+  const cost = document.getElementById("editCost").value;
+  const price = document.getElementById("editPrice").value;
+  const qty = document.getElementById("qty").value;
+  
+  fetch(`${GAS_URL}?action=update&isNew=true&barcode=${currentProduct.barcode}&name=${encodeURIComponent(name)}&cost=${cost}&price=${price}&qty=${qty}`)
+    .then(res => res.json())
+    .then(data => {
+      if(data.success) {
+        alert("🎉 商品自動建檔成功！已同步入庫！");
+        liff.closeWindow();
+      }
+    });
+}
