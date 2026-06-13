@@ -3,163 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>行動進銷存系統</title>
+    <title>行動進銷存系統 (除錯版)</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; text-align: center; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); }
         button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-scan { background-color: #00b050; color: white; }
-        .btn-submit { background-color: #00b050; color: white; }
-        .input-group { margin: 15px 0; text-align: left; }
-        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
-        #reader { width: 100%; margin: auto; background: #000; border-radius: 5px; }
-        #loadingStatus { margin-top: 15px; color: #ff3333; font-weight: bold; }
-        .success-text { color: #00b050; font-weight: bold; font-size: 18px; margin: 10px 0; }
+        #debugLog { margin-top: 15px; padding: 10px; background: #fff3f3; color: #ff3333; border: 1px dashed #ff9999; border-radius: 5px; text-align: left; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📦 條碼進銷存系統</h2>
-    <p style="color: #666; font-size: 14px;">請將商品條碼對準相機進行掃描</p>
+    <h2>📦 條碼進銷存系統 (Debug Mode)</h2>
+    <p style="color: #666; font-size: 14px;">此版本已啟動錯誤回報追蹤</p>
     
-    <button class="btn-scan" id="scanBtn" onclick="startScan()">📷 開啟相機掃描條碼</button>
+    <button class="btn-scan" onclick="startScan()">📷 開啟相機儲存條碼</button>
     <div id="reader" style="display:none;"></div>
 
-    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-
-    <div id="resultArea" style="display:none; text-align: left;">
-        <h3 id="barcodeDisplay" style="color: #00b050; border-bottom: 2px solid #00b050; padding-bottom: 8px;">條碼: </h3>
-        
-        <div id="pName" class="input-group"></div>
-        <div id="pCost" class="input-group"></div>
-        <div id="pPrice" class="input-group"></div>
-        <div id="pStock" style="margin: 12px 0; font-weight: bold; color: #333;"></div>
-        <div id="pReserved" style="margin: 12px 0; color: #666;"></div>
-        <div id="pAvailable" style="margin: 12px 0; color: #00b050; font-weight: bold;"></div>
-        
-        <div id="btnArea"></div>
-    </div>
-
-    <div id="loadingStatus" style="color: #666;"></div>
+    <div id="debugLog">🟢 系統初始化中，等待操作...</div>
 </div>
 
 <script>
-// 🔗 你的 Google GAS 後台連接網址
+// 🔍 請幫我肉眼檢查這裡的 GAS_URL 網址前後有沒有不小心多複製到空格
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsx2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec";
 let currentBarcode = "";
-let html5QrcodeScanner = null;
+
+// 🚀 全域錯誤攔截器：只要網頁有任何地方寫錯或報錯，立刻抓出來印在畫面上！
+window.onerror = function(message, source, lineno, colno, error) {
+    const logBox = document.getElementById('debugLog');
+    logBox.style.background = '#fff3f3';
+    logBox.style.color = '#ff3333';
+    logBox.innerHTML = `🚨 <b>網頁程式碼發生錯誤！</b><br>` +
+                       `❌ 錯誤訊息: ${message}<br>` +
+                       `📍 錯誤行號: 第 ${lineno} 行<br>` +
+                       `🔗 錯誤來源: ${source}`;
+    return false;
+};
 
 function startScan() {
-    document.getElementById('reader').style.display = 'block';
-    document.getElementById('loadingStatus').style.color = '#666';
-    document.getElementById('loadingStatus').innerText = '🎥 相機啟動中...';
-    document.getElementById('resultArea').style.display = 'none';
-
-    // 初始化掃描器
-    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: { width: 280, height: 160 },
-        rememberLastUsedCamera: true
-    });
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    document.getElementById('debugLog').innerHTML = "⏳ 正在啟動鏡頭...";
+    try {
+        document.getElementById('reader').style.display = 'block';
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 150 } });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    } catch(err) {
+        document.getElementById('debugLog').innerHTML = `🚨 相機初始化失敗: ${err.message}`;
+    }
 }
 
 function onScanFailure(error) {
-    // 掃描過程中的常態性對焦失敗，不予提示以防干擾使用者
-    console.warn(`掃描中: ${error}`);
+    // 忽略常態對焦失敗
 }
 
-// 🌟 核心修正：只有當真正成功「嗶」到條碼，才允許呼叫後台！
 function onScanSuccess(decodedText) {
     currentBarcode = decodedText.trim();
+    document.getElementById('reader').style.display = 'none';
+    document.getElementById('debugLog').style.color = '#333';
+    document.getElementById('debugLog').style.background = '#f0f9f0';
+    document.getElementById('debugLog').innerHTML = `⏳ 成功辨識條碼: <b>${currentBarcode}</b><br>📡 正在向 Google GAS 發送聯絡請求...`;
     
-    // 關閉相機，維持畫面乾淨
-    if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(err => console.error(err));
-        document.getElementById('reader').style.display = 'none';
-    }
+    const requestUrl = `${GAS_URL}?action=search&barcode=${encodeURIComponent(currentBarcode)}`;
     
-    document.getElementById('loadingStatus').style.color = '#666';
-    document.getElementById('loadingStatus').innerText = `🔍 條碼 [${currentBarcode}] 查詢中...`;
-    
-    // 向 Google 後台請求資料
-    fetch(`${GAS_URL}?action=search&barcode=${encodeURIComponent(currentBarcode)}`)
+    fetch(requestUrl)
         .then(res => {
-            if (!res.ok) throw new Error('網路回應不正確');
+            document.getElementById('debugLog').innerHTML += `<br>✅ 收到 Google 伺服器初步回應！狀態碼: ${res.status}`;
             return res.json();
         })
         .then(data => {
-            document.getElementById('loadingStatus').innerText = '';
-            const resultArea = document.getElementById('resultArea');
-            resultArea.style.display = 'block';
-            document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
-
-            if (data.isNew) {
-                // 🌟 全新商品表單
-                document.getElementById('pName').innerHTML = `<label>品名：</label><input type='text' id='editName' placeholder='請輸入全新商品名稱'>`;
-                document.getElementById('pCost').innerHTML = `<label>成本：$</label><input type='number' id='editCost' value='0' min='0'>`;
-                document.getElementById('pPrice').innerHTML = `<label>售價：$</label><input type='number' id='editPrice' value='0' min='0'>`;
-                document.getElementById('pStock').innerText = `總庫存：0 (全新建檔)`;
-                document.getElementById('pReserved').innerText = ``;
-                document.getElementById('pAvailable').innerText = ``;
-                
-                document.getElementById('btnArea').innerHTML = `<button class="btn-submit" onclick="saveNewProduct()">💾 確認建立新檔案並入庫</button>`;
-            } else {
-                // 已有商品展示
-                document.getElementById('pName').innerHTML = `<b>品名：</b> ${data.name}`;
-                document.getElementById('pPrice').innerHTML = `<b>售價：</b> $${data.price}`;
-                document.getElementById('pCost').innerHTML = `<b>成本：</b> $${data.cost}`;
-                document.getElementById('pStock').innerText = `總庫存：${data.stock}`;
-                document.getElementById('pReserved').innerText = `預留數量：${data.reserved}`;
-                document.getElementById('pAvailable').innerText = `可用庫存：${data.available}`;
-                document.getElementById('btnArea').innerHTML = `<div class="success-text">✅ 此商品已記錄在商品總表中</div>`;
-            }
+            document.getElementById('debugLog').innerHTML += `<br>🎉 解析 JSON 資料成功！資料庫回應：${JSON.stringify(data)}`;
         })
         .catch(err => {
-            console.error(err);
-            document.getElementById('loadingStatus').style.color = '#ff3333';
-            document.getElementById('loadingStatus').innerText = '❌ 連線至 Google 伺服器失敗，請確認網際網路連線或 GAS 部署狀態。';
-        });
-}
-
-function saveNewProduct() {
-    const nameEl = document.getElementById('editName');
-    const costEl = document.getElementById('editCost');
-    const priceEl = document.getElementById('editPrice');
-
-    if (!nameEl || !nameEl.value.trim()) {
-        alert('請輸入商品名稱！');
-        return;
-    }
-
-    const name = nameEl.value.trim();
-    const cost = costEl ? costEl.value : 0;
-    const price = priceEl ? priceEl.value : 0;
-    const initStock = 1; // 預設新增即入庫 1 件
-
-    document.getElementById('loadingStatus').style.color = '#666';
-    document.getElementById('loadingStatus').innerText = '⏳ 新商品自動建檔中，請稍候...';
-
-    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(currentBarcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
-
-    fetch(targetUrl)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.msg); // 跳出「🎉 商品成功建立並入庫！」
-                location.reload(); 
-            } else {
-                alert('建檔失敗原因：' + data.msg);
-                document.getElementById('loadingStatus').innerText = '';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('系統傳送失敗，請重新嘗試。');
-            document.getElementById('loadingStatus').innerText = '';
+            document.getElementById('debugLog').style.background = '#fff3f3';
+            document.getElementById('debugLog').style.color = '#ff3333';
+            document.getElementById('debugLog').innerHTML += `<br>🚨 <b>Fetch 請求失敗！內部細節：</b><br>` +
+                                                             `• 錯誤名稱: ${err.name}<br>` +
+                                                             `• 錯誤原因: ${err.message}<br>` +
+                                                             `• 目標網址: <a href="${requestUrl}" target="_blank">點此手動測試 GAS 網址是否活著</a>`;
         });
 }
 </script>
