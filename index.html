@@ -1,45 +1,146 @@
-function searchProduct(barcode) {
-  fetch(`${GAS_URL}?action=search&barcode=${barcode}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        currentProduct = data;
-        currentProduct.barcode = barcode;
-        
-        if (data.isNew) {
-          // 💡 新商品的畫面：名稱、成本、售價都變成可輸入的 <input> 框
-          document.getElementById("pName").innerHTML = `名稱：<input type="text" id="editName" value="${data.name}">`;
-          document.getElementById("pCost").innerHTML = `成本：$<input type="number" id="editCost" value="0">`;
-          document.getElementById("pPrice").innerHTML = `售價：$<input type="number" id="editPrice" value="${data.price}">`;
-          document.getElementById("pStock").innerText = "目前庫存：0 (全新建檔)";
-          
-          // 下方的按鈕變成一個【確認建檔】按鈕
-          document.getElementById("btnArea").innerHTML = `
-            <label>初始入庫量：</label><input type="number" id="qty" value="1"><br><br>
-            <button onclick="createNewProduct()" style="background-color: #06C755;">💾 確認全新建檔並入庫</button>
-          `;
-        } else {
-          // 舊商品的畫面：維持原本唯讀顯示，並提供「➕入庫」與「➖出庫」按鈕
-          // ... (維持前一次對話提供的唯讀顯示與按鈕邏輯) ...
-        }
-        document.getElementById("resultCard").style.display = "block";
-      }
-    });
-}
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行動進銷存系統</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: none; margin-top: 20px; }
+        input { width: 80%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 12px; margin: 8px 0; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
 
-// 呼叫全新的建檔 API
-function createNewProduct() {
-  const name = document.getElementById("editName").value;
-  const cost = document.getElementById("editCost").value;
-  const price = document.getElementById("editPrice").value;
-  const qty = document.getElementById("qty").value;
-  
-  fetch(`${GAS_URL}?action=update&isNew=true&barcode=${currentProduct.barcode}&name=${encodeURIComponent(name)}&cost=${cost}&price=${price}&qty=${qty}`)
-    .then(res => res.json())
-    .then(data => {
-      if(data.success) {
-        alert("🎉 商品自動建檔成功！已同步入庫！");
-        liff.closeWindow();
-      }
-    });
-}
+    <h2>📦 條碼進銷存系統</h2>
+    <button onclick="scanBarcode()" style="background-color: #06C755;">📷 點擊掃描國際條碼</button>
+
+    <div id="resultCard" class="card">
+        <h3 id="barcodeDisplay" style="color: #666;"></h3>
+        <hr>
+        <div id="pName">名稱：-</div>
+        <div id="pCost">成本：-</div>
+        <div id="pPrice">售價：-</div>
+        <p id="pStock">總庫存：-</p>
+        <p id="pReserved" style="color: #ffa500;">⚠️ 已預留：-</p>
+        <p id="pAvailable" style="color: #06C755; font-weight: bold;">✅ 可用庫存：-</p>
+        
+        <hr>
+        <div id="btnArea">
+            </div>
+    </div>
+
+    <script>
+        // ⚠️ 記得把下方這串網址改成你真正的 Google GAS 網址 (網址最後通常是 /exec)
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsax2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec"; 
+        let currentProduct = {};
+
+        // 1. 初始化 LINE LIFF
+        document.addEventListener("DOMContentLoaded", function() {
+            liff.init({ liffId: "2010373738-zzhwMsmv" }) // 填入你的 LIFF ID
+                .then(() => { console.log("LIFF 初始化成功"); })
+                .catch((err) => { console.error("LIFF 初始化失敗", err); });
+        });
+
+        // 2. 啟動 LINE 相機掃碼
+        function scanBarcode() {
+            if (!liff.isInClient()) {
+                alert("請在手機 LINE 軟體內執行掃碼");
+                // 測試用模擬：若在電腦瀏覽器測試，可手動輸入條碼
+                let demoBarcode = prompt("請輸入測試條碼:");
+                if(demoBarcode) searchProduct(demoBarcode);
+                return;
+            }
+            
+            liff.scanCodeV2()
+                .then((result) => {
+                    if (result.value) {
+                        searchProduct(result.value);
+                    }
+                })
+                .catch((err) => { alert("掃描失敗或取消: " + err); });
+        }
+
+        // 3. 查詢商品邏輯 (支援新商品/舊商品/預留量)
+        function searchProduct(barcode) {
+            document.getElementById("barcodeDisplay").innerText = "條碼: " + barcode;
+            
+            fetch(`${GAS_URL}?action=search&barcode=${barcode}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentProduct = data;
+                        currentProduct.barcode = barcode;
+                        
+                        if (data.isNew) {
+                            // 💡 新商品的畫面：名稱、成本、售價變成可輸入框
+                            document.getElementById("pName").innerHTML = `名稱：<input type="text" id="editName" value="${data.name}">`;
+                            document.getElementById("pCost").innerHTML = `成本：$<input type="number" id="editCost" value="0">`;
+                            document.getElementById("pPrice").innerHTML = `售價：$<input type="number" id="editPrice" value="${data.price}">`;
+                            document.getElementById("pStock").innerText = "總庫存：0 (全新建檔)";
+                            document.getElementById("pReserved").innerText = "";
+                            document.getElementById("pAvailable").innerText = "";
+                            
+                            document.getElementById("btnArea").innerHTML = `
+                                <label>初始入庫量：</label><input type="number" id="qty" value="1" min="1"><br><br>
+                                <button onclick="createNewProduct()" style="background-color: #06C755;">💾 確認全新建檔並入庫</button>
+                            `;
+                        } else {
+                            // 舊商品的畫面：顯示現有庫存與預留
+                            document.getElementById("pName").innerText = "商品名稱：" + data.name;
+                            document.getElementById("pCost").innerText = "進貨成本：$" + data.cost;
+                            document.getElementById("pPrice").innerText = "銷售售價：$" + data.price;
+                            document.getElementById("pStock").innerText = "總庫存：" + data.stock;
+                            document.getElementById("pReserved").innerText = "⚠️ 已預留：" + data.reserved;
+                            document.getElementById("pAvailable").innerText = "✅ 可用庫存：" + data.available;
+                            
+                            document.getElementById("btnArea").innerHTML = `
+                                <label>變動數量：</label><input type="number" id="qty" value="1" min="1"><br><br>
+                                <button onclick="updateStock('in')" style="background-color: #28a745;">➕ 常規進貨入庫</button>
+                                <button onclick="updateStock('out')" style="background-color: #dc3545;">➖ 常規販售出庫</button>
+                                <button onclick="updateStock('reserve')" style="background-color: #ffa500;">🔒 放入客人預留區</button>
+                                <button onclick="updateStock('unreserve')" style="background-color: #17a2b8;">📦 預留貨現場領取出庫</button>
+                            `;
+                        }
+                        document.getElementById("resultCard").style.display = "block";
+                    }
+                })
+                .catch(err => alert("網路查詢失敗，請檢查 GAS 網址是否正確。"));
+        }
+
+        // 4. 現有商品變動庫存
+        function updateStock(type) {
+            const qty = document.getElementById("qty").value;
+            fetch(`${GAS_URL}?action=update&isNew=false&row=${currentProduct.row}&qty=${qty}&type=${type}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("🎉 庫存更新成功！最新可用庫存為: " + data.newStock);
+                        liff.closeWindow();
+                    } else {
+                        alert(data.msg); // 顯示可用庫存不足等錯誤訊息
+                    }
+                });
+        }
+
+        // 5. 全新商品自動建檔
+        function createNewProduct() {
+            const name = document.getElementById("editName").value;
+            const cost = document.getElementById("editCost").value;
+            const price = document.getElementById("editPrice").value;
+            const qty = document.getElementById("qty").value;
+            
+            fetch(`${GAS_URL}?action=update&isNew=true&barcode=${currentProduct.barcode}&name=${encodeURIComponent(name)}&cost=${cost}&price=${price}&qty=${qty}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("🎉 新商品已成功自動網搜建檔並入庫！");
+                        liff.closeWindow();
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
