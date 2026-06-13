@@ -1,16 +1,19 @@
 function saveNewProduct() {
-    // 🌟 1. 精準對齊你的網頁動態生成的輸入框 id
+    // 🌟 1. 精準對齊你動態產生的輸入框 id
     const nameEl = document.getElementById('editName');
     const costEl = document.getElementById('editCost');
     const priceEl = document.getElementById('editPrice');
     
-    // 如果網頁上沒有手動輸入數量的欄位，我們預設初始入庫為 1
-    const initStock = 1; 
-    
-    // 抓取目前畫面上的條碼
-    const barcode = barcode; 
+    // 抓取目前畫面上顯示的條碼文字（把前綴文字去掉，只留純數字）
+    let barcodeStr = "";
+    const barcodeDisplayEl = document.getElementById('barcodeDisplay');
+    if (barcodeDisplayEl) {
+        barcodeStr = barcodeDisplayEl.innerText.replace('條碼:', '').replace('條碼 :', '').trim();
+    } else if (typeof barcode !== 'undefined') {
+        barcodeStr = barcode;
+    }
 
-    // 安全檢查：防呆
+    // 安全檢查
     if (!nameEl || !nameEl.value.trim()) {
         alert('請輸入商品名稱！');
         return;
@@ -19,20 +22,20 @@ function saveNewProduct() {
     const name = nameEl.value.trim();
     const cost = costEl ? costEl.value : 0;
     const price = priceEl ? priceEl.value : 0;
+    const initStock = 1; // 初始入庫數量固定預設為 1
 
-    // 狀態提示
     const statusEl = document.getElementById('loadingStatus');
     if (statusEl) statusEl.innerText = '新商品自動建檔中...';
 
-    // 🌟 2. 組裝跟新後台 100% 完美的通訊網址
-    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(barcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
+    // 🌟 2. 組裝傳送網址
+    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(barcodeStr)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
 
     fetch(targetUrl)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.msg); // 彈出「🎉 商品成功建立並入庫！」
-                location.reload(); // 重新整理網頁
+                alert(data.msg); // 跳出成功訊息
+                location.reload(); // 重新整理網頁回到掃描狀態
             } else {
                 alert('失敗原因：' + data.msg);
             }
