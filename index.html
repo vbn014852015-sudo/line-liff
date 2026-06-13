@@ -1,173 +1,44 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>行動進銷存系統</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; text-align: center; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: none; margin-top: 20px; text-align: left; }
-        input { width: 90%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 14px; margin: 8px 0; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; }
-        #reader { width: 100%; max-width: 400px; margin: 20px auto; border: 3px dashed #06C755; border-radius: 8px; overflow: hidden; display: none; }
-    </style>
-</head>
-<body>
-
-    <h2>📦 條碼進銷存系統</h2>
-    <p style="color: #666;">請將商品條碼轉為橫向，置於綠色虛線框內掃描</p>
-    <button id="scanBtn" onclick="startScan()" style="background-color: #06C755;">📷 開啟相機掃描條碼</button>
+function saveNewProduct() {
+    // 🌟 1. 精準對齊你的網頁動態生成的輸入框 id
+    const nameEl = document.getElementById('editName');
+    const costEl = document.getElementById('editCost');
+    const priceEl = document.getElementById('editPrice');
     
-    <div id="reader"></div>
+    // 如果網頁上沒有手動輸入數量的欄位，我們預設初始入庫為 1
+    const initStock = 1; 
+    
+    // 抓取目前畫面上的條碼
+    const barcode = barcode; 
 
-    <div id="resultCard" class="card">
-        <h3 id="barcodeDisplay" style="color: #06C755; margin-top: 0;"></h3>
-        <hr style="border: 0; border-top: 1px solid #eee;">
-        <div id="pName">名稱：-</div>
-        <div id="pCost">成本：-</div>
-        <div id="pPrice">售價：-</div>
-        <p id="pStock">總庫存：-</p>
-        <p id="pReserved" style="color: #ffa500;">⚠️ 已預留：-</p>
-        <p id="pAvailable" style="color: #06C755; font-weight: bold;">✅ 可用庫存：-</p>
-        
-        <hr style="border: 0; border-top: 1px solid #eee;">
-        <div id="btnArea"></div>
-    </div>
+    // 安全檢查：防呆
+    if (!nameEl || !nameEl.value.trim()) {
+        alert('請輸入商品名稱！');
+        return;
+    }
 
-    <script>
-        // 固定連線至你的 Google GAS
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsax2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec"; 
-        let currentProduct = {};
-        let html5QrcodeScanner;
+    const name = nameEl.value.trim();
+    const cost = costEl ? costEl.value : 0;
+    const price = priceEl ? priceEl.value : 0;
 
-        function startScan() {
-            document.getElementById("reader").style.display = "block";
-            document.getElementById("scanBtn").style.display = "none";
-            document.getElementById("resultCard").style.display = "none";
-            
-            html5QrcodeScanner = new Html5Qrcode("reader");
-            
-            const config = { 
-                fps: 20, 
-                qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    return { width: viewfinderWidth * 0.85, height: 130 };
-                },
-                formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.UPC_A ]
-            };
+    // 狀態提示
+    const statusEl = document.getElementById('loadingStatus');
+    if (statusEl) statusEl.innerText = '新商品自動建檔中...';
 
-            html5QrcodeScanner.start(
-                { facingMode: "environment" }, 
-                config,
-                (decodedText) => {
-                    html5QrcodeScanner.stop().then(() => {
-                        document.getElementById("reader").style.display = "none";
-                        document.getElementById("scanBtn").style.display = "block";
-                        searchProduct(decodedText); 
-                    });
-                },
-                (errorMessage) => {}
-            ).catch(err => {
-                alert("相機啟動失敗，請確保已允許網頁使用相機權限。");
-            });
-        }
+    // 🌟 2. 組裝跟新後台 100% 完美的通訊網址
+    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(barcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
 
-        // 修正字串拼接，確保資料能安全傳遞給後台
-        function searchProduct(barcode) {
-            document.getElementById("barcodeDisplay").innerText = "🔍 條碼: " + barcode;
-            document.getElementById("resultCard").style.display = "block";
-            document.getElementById("pName").innerText = "讀取中...";
-            document.getElementById("btnArea").innerHTML = "";
-            
-            // 使用傳統的安全字串拼接，避免手機瀏覽器不認得變數
-            var targetUrl = GAS_URL + "?action=search&barcode=" + barcode;
-            
-            fetch(targetUrl)
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    if (data.success) {
-                        currentProduct = data;
-                        currentProduct.barcode = barcode;
-                        
-                        if (data.isNew) {
-                            document.getElementById("pName").innerHTML = "品名：<input type='text' id='editName' value='" + data.name + "' placeholder='請輸入商品名稱'>";
-                            document.getElementById("pCost").innerHTML = "成本：$<input type='number' id='editCost' value='0'>";
-                            document.getElementById("pPrice").innerHTML = "售價：$<input type='number' id='editPrice' value='" + data.price + "'>";
-                            document.getElementById("pStock").innerText = "總庫存：0 (全新建檔)";
-                            document.getElementById("pReserved").innerText = "";
-                            document.getElementById("pAvailable").innerText = "";
-                            
-                            document.getElementById("btnArea").innerHTML = 
-                                "<label style='font-weight:bold;'>初始入庫數量：</label><br>" +
-                                "<input type='number' id='qty' value='1' min='1'><br>" +
-                                "<button onclick='createNewProduct()' style='background-color: #06C755;'>💾 確認建立新檔案並入庫</button>";
-                        } else {
-                            document.getElementById("pName").innerText = "商品名稱：" + data.name;
-                            document.getElementById("pCost").innerText = "進貨成本：$" + data.cost;
-                            document.getElementById("pPrice").innerText = "銷售售價：$" + data.price;
-                            document.getElementById("pStock").innerText = "總庫存：" + data.stock;
-                            document.getElementById("pReserved").innerText = "⚠️ 已預留：" + data.reserved;
-                            document.getElementById("pAvailable").innerText = "✅ 可用庫存：" + data.available;
-                            
-                            document.getElementById("btnArea").innerHTML = 
-                                "<label style='font-weight:bold;'>變動數量：</label><br>" +
-                                "<input type='number' id='qty' value='1' min='1'><br>" +
-                                "<button onclick=\"updateStock('in')\" style='background-color: #28a745;'>➕ 進貨補庫存</button>" +
-                                "<button onclick=\"updateStock('out')\" style='background-color: #dc3545;'>➖ 現場售出出庫</button>" +
-                                "<button onclick=\"updateStock('reserve')\" style='background-color: #ffa500;'>🔒 放入客人預留區</button>" +
-                                "<button onclick=\"updateStock('unreserve')\" style='background-color: #17a2b8;'>📦 預留貨現場領取出庫</button>";
-                        }
-                    } else {
-                        alert("後台系統回傳錯誤：" + data.msg);
-                    }
-                })
-                .catch(function(err) { 
-                    alert("連線失敗！請確認 GAS 後台是否按了「部署」並設定為允許「所有人」存取。"); 
-                });
-        }
-
-        function updateStock(type) {
-            const qty = document.getElementById("qty").value;
-            if(!qty || qty < 1) { alert("請輸入正確的數量"); return; }
-            document.getElementById("btnArea").innerHTML = "<p>同步至試算表中...</p>";
-            
-            var targetUrl = GAS_URL + "?action=update&isNew=false&row=" + currentProduct.row + "&qty=" + qty + "&type=" + type;
-            
-            fetch(targetUrl)
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    if (data.success) {
-                        alert("🎉 試算表同步成功！最新可用庫存為: " + data.newStock);
-                        location.reload(); 
-                    } else {
-                        alert("❌ 操作失敗：" + data.msg);
-                        searchProduct(currentProduct.barcode);
-                    }
-                }).catch(function(err) { alert("傳送失敗，請重試"); });
-        }
-
-        function createNewProduct() {
-            const name = document.getElementById("editName").value;
-            const cost = document.getElementById("editCost").value;
-            const price = document.getElementById("editPrice").value;
-            const qty = document.getElementById("qty").value;
-            
-            if(!name) { alert("請填寫商品名稱"); return; }
-            document.getElementById("btnArea").innerHTML = "<p>新商品自動建檔中...</p>";
-            
-            var targetUrl = GAS_URL + "?action=update&isNew=true&barcode=" + currentProduct.barcode + "&name=" + encodeURIComponent(name) + "&cost=" + cost + "&price=" + price + "&qty=" + qty;
-            
-            fetch(targetUrl)
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    if (data.success) {
-                        alert("🎉 新商品已成功自動紀錄至 Google 試算表！");
-                        location.reload();
-                    } else {
-                        alert("建檔失敗，請重新嘗試。");
-                    }
-                }).catch(function(err) { alert("傳送失敗，請重試"); });
-        }
-    </script>
-</body>
-</html>
+    fetch(targetUrl)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.msg); // 彈出「🎉 商品成功建立並入庫！」
+                location.reload(); // 重新整理網頁
+            } else {
+                alert('失敗原因：' + data.msg);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('傳送失敗，請重試');
+        });
+}
