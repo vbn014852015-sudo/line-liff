@@ -47,8 +47,8 @@
 </div>
 
 <script>
-// 🌟 這裡最重要！請把你剛剛在 Google 管理部署複製的最新網址貼在下面這行 🌟
-const GAS_URL = "請把這段中文字換成你剛剛複製的最新網址";
+// 🚀 已鎖定最新的正確 GAS 部署網址
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsx2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec";
 let currentBarcode = "";
 let html5QrcodeScanner = null;
 
@@ -79,43 +79,46 @@ function onScanSuccess(decodedText) {
     document.getElementById('loadingStatus').style.color = '#666';
     document.getElementById('loadingStatus').innerText = `🔍 條碼 [${currentBarcode}] 查詢中...`;
     
-    fetch(`${GAS_URL}?action=search&barcode=${encodeURIComponent(currentBarcode)}`)
-        .then(res => {
-            if (!res.ok) throw new Error('網路回應不正確');
-            return res.json();
-        })
-        .then(data => {
-            document.getElementById('loadingStatus').innerText = '';
-            const resultArea = document.getElementById('resultArea');
-            resultArea.style.display = 'block';
-            document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
+    // 🌟 核心修正：強制指定 redirect: "follow" 允許 Google 重新導向
+    fetch(`${GAS_URL}?action=search&barcode=${encodeURIComponent(currentBarcode)}`, {
+        method: "GET",
+        mode: "cors",
+        redirect: "follow"
+    })
+    .then(res => {
+        if (!res.ok) throw new Error('網路回應不正確');
+        return res.json();
+    })
+    .then(data => {
+        document.getElementById('loadingStatus').innerText = '';
+        const resultArea = document.getElementById('resultArea');
+        resultArea.style.display = 'block';
+        document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
 
-            if (data.isNew) {
-                // 全新商品建檔表單
-                document.getElementById('pName').innerHTML = `<label>品名：</label><input type='text' id='editName' placeholder='請輸入全新商品名稱'>`;
-                document.getElementById('pCost').innerHTML = `<label>成本：$</label><input type='number' id='editCost' value='0' min='0'>`;
-                document.getElementById('pPrice').innerHTML = `<label>售價：$</label><input type='number' id='editPrice' value='0' min='0'>`;
-                document.getElementById('pStock').innerText = `總庫存：0 (全新建檔)`;
-                document.getElementById('pReserved').innerText = ``;
-                document.getElementById('pAvailable').innerText = ``;
-                
-                document.getElementById('btnArea').innerHTML = `<button class="btn-submit" onclick="saveNewProduct()">💾 確認建立新檔案並入庫</button>`;
-            } else {
-                // 已存在商品展示
-                document.getElementById('pName').innerHTML = `<b>品名：</b> ${data.name}`;
-                document.getElementById('pPrice').innerHTML = `<b>售價：</b> $${data.price}`;
-                document.getElementById('pCost').innerHTML = `<b>成本：</b> $${data.cost}`;
-                document.getElementById('pStock').innerText = `總庫存：${data.stock}`;
-                document.getElementById('pReserved').innerText = `預留數量：${data.reserved}`;
-                document.getElementById('pAvailable').innerText = `可用庫存：${data.available}`;
-                document.getElementById('btnArea').innerHTML = `<div class="success-text">✅ 此商品已記錄在商品總表中</div>`;
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            document.getElementById('loadingStatus').style.color = '#ff3333';
-            document.getElementById('loadingStatus').innerText = '❌ 連線失敗。請確認你的 GAS 最新網址已正確填入 GitHub，且已發布為所有人存取。';
-        });
+        if (data.isNew) {
+            document.getElementById('pName').innerHTML = `<label>品名：</label><input type='text' id='editName' placeholder='請輸入全新商品名稱'>`;
+            document.getElementById('pCost').innerHTML = `<label>成本：$</label><input type='number' id='editCost' value='0' min='0'>`;
+            document.getElementById('pPrice').innerHTML = `<label>售價：$</label><input type='number' id='editPrice' value='0' min='0'>`;
+            document.getElementById('pStock').innerText = `總庫存：0 (全新建檔)`;
+            document.getElementById('pReserved').innerText = ``;
+            document.getElementById('pAvailable').innerText = ``;
+            
+            document.getElementById('btnArea').innerHTML = `<button class="btn-submit" onclick="saveNewProduct()">💾 確認建立新檔案並入庫</button>`;
+        } else {
+            document.getElementById('pName').innerHTML = `<b>品名：</b> ${data.name}`;
+            document.getElementById('pPrice').innerHTML = `<b>售價：</b> $${data.price}`;
+            document.getElementById('pCost').innerHTML = `<b>成本：</b> $${data.cost}`;
+            document.getElementById('pStock').innerText = `總庫存：${data.stock}`;
+            document.getElementById('pReserved').innerText = `預留數量：${data.reserved}`;
+            document.getElementById('pAvailable').innerText = `可用庫存：${data.available}`;
+            document.getElementById('btnArea').innerHTML = `<div class="success-text">✅ 此商品已記錄在商品總表中</div>`;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('loadingStatus').style.color = '#ff3333';
+        document.getElementById('loadingStatus').innerText = '❌ 連線失敗。請嘗試點擊手機瀏覽器右下角的「三點」，選擇「在本機瀏覽器開啟」測試。';
+    });
 }
 
 function saveNewProduct() {
@@ -138,22 +141,27 @@ function saveNewProduct() {
 
     const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(currentBarcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
 
-    fetch(targetUrl)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.msg); 
-                location.reload(); 
-            } else {
-                alert('建檔失敗原因：' + data.msg);
-                document.getElementById('loadingStatus').innerText = '';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('系統傳送失敗，請重新嘗試。');
+    // 🌟 核心修正：新增商品同樣加入防阻擋機制
+    fetch(targetUrl, {
+        method: "GET",
+        mode: "cors",
+        redirect: "follow"
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.msg); 
+            location.reload(); 
+        } else {
+            alert('建檔失敗原因：' + data.msg);
             document.getElementById('loadingStatus').innerText = '';
-        });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('系統傳送失敗，請重新嘗試。');
+        document.getElementById('loadingStatus').innerText = '';
+    });
 }
 </script>
 </body>
