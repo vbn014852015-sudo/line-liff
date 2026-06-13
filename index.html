@@ -1,19 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行動進銷存系統</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; text-align: center; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0,0,0,0.1); }
+        button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-scan { background-color: #00b050; color: white; }
+        .btn-submit { background-color: #00b050; color: white; }
+        .input-group { margin: 15px 0; text-align: left; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        #reader { width: 100%; margin: auto; }
+        #loadingStatus { margin-top: 15px; color: #666; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📦 條碼進銷存系統</h2>
+    <p style="color: #666;">請將商品條碼對準相機進行掃描</p>
+    
+    <button class="btn-scan" onclick="startScan()">📷 開啟相機掃描條碼</button>
+    <div id="reader" style="display:none;"></div>
+
+    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
+    <div id="resultArea" style="display:none; text-align: left;">
+        <h3 id="barcodeDisplay" style="color: #00b050;">條碼: </h3>
+        
+        <div id="pName" class="input-group"></div>
+        <div id="pCost" class="input-group"></div>
+        <div id="pPrice" class="input-group"></div>
+        <div id="pStock" style="margin: 10px 0; font-weight: bold;"></div>
+        <div id="pReserved" style="margin: 10px 0;"></div>
+        <div id="pAvailable" style="margin: 10px 0;"></div>
+        
+        <div id="btnArea"></div>
+    </div>
+
+    <div id="loadingStatus"></div>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsx2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec";
+let currentBarcode = "";
+
+function startScan() {
+    document.getElementById('reader').style.display = 'block';
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 150 } });
+    html5QrcodeScanner.render(onScanSuccess);
+}
+
+function onScanSuccess(decodedText) {
+    currentBarcode = decodedText.trim();
+    document.getElementById('reader').style.display = 'none';
+    document.getElementById('loadingStatus').innerText = '🔍 正在查詢商品資料...';
+    
+    fetch(`${GAS_URL}?action=search&barcode=${currentBarcode}`)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('loadingStatus').innerText = '';
+            const resultArea = document.getElementById('resultArea');
+            resultArea.style.display = 'block';
+            document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
+
+            if (data.isNew) {
+                document.getElementById('pName').innerHTML = `<label>品名：</label><input type='text' id='editName' placeholder='請輸入商品名稱'>`;
+                document.getElementById('pCost').innerHTML = `<label>成本：$</label><input type='number' id='editCost' value='0'>`;
+                document.getElementById('pPrice').innerHTML = `<label>售價：$</label><input type='number' id='editPrice' value='0'>`;
+                document.getElementById('pStock').innerText = `總庫存：0 (全新建檔)`;
+                document.getElementById('pReserved').innerText = ``;
+                document.getElementById('pAvailable').innerText = ``;
+                
+                document.getElementById('btnArea').innerHTML = `<button class="btn-submit" onclick="saveNewProduct()">💾 確認建立新檔案並入庫</button>`;
+            } else {
+                document.getElementById('pName').innerHTML = `<b>品名：</b> ${data.name}`;
+                document.getElementById('pPrice').innerHTML = `<b>售價：</b> $${data.price}`;
+                document.getElementById('pCost').innerHTML = `<b>成本：</b> $${data.cost}`;
+                document.getElementById('pStock').innerText = `總庫存：${data.stock}`;
+                document.getElementById('pReserved').innerText = `預留數量：${data.reserved}`;
+                document.getElementById('pAvailable').innerText = `可用庫存：${data.available}`;
+                document.getElementById('btnArea').innerHTML = `<p style="color: #00b050; font-weight:bold;">驗證成功：此商品已存在！</p>`;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('loadingStatus').innerText = '連線失敗，請稍後重試。';
+        });
+}
+
 function saveNewProduct() {
-    // 🌟 1. 精準對齊你動態產生的輸入框 id
     const nameEl = document.getElementById('editName');
     const costEl = document.getElementById('editCost');
     const priceEl = document.getElementById('editPrice');
-    
-    // 抓取目前畫面上顯示的條碼文字（把前綴文字去掉，只留純數字）
-    let barcodeStr = "";
-    const barcodeDisplayEl = document.getElementById('barcodeDisplay');
-    if (barcodeDisplayEl) {
-        barcodeStr = barcodeDisplayEl.innerText.replace('條碼:', '').replace('條碼 :', '').trim();
-    } else if (typeof barcode !== 'undefined') {
-        barcodeStr = barcode;
-    }
 
-    // 安全檢查
     if (!nameEl || !nameEl.value.trim()) {
         alert('請輸入商品名稱！');
         return;
@@ -22,20 +106,18 @@ function saveNewProduct() {
     const name = nameEl.value.trim();
     const cost = costEl ? costEl.value : 0;
     const price = priceEl ? priceEl.value : 0;
-    const initStock = 1; // 初始入庫數量固定預設為 1
+    const initStock = 1;
 
-    const statusEl = document.getElementById('loadingStatus');
-    if (statusEl) statusEl.innerText = '新商品自動建檔中...';
+    document.getElementById('loadingStatus').innerText = '新商品自動建檔中...';
 
-    // 🌟 2. 組裝傳送網址
-    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(barcodeStr)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
+    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(currentBarcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
 
     fetch(targetUrl)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.msg); // 跳出成功訊息
-                location.reload(); // 重新整理網頁回到掃描狀態
+                alert(data.msg);
+                location.reload(); 
             } else {
                 alert('失敗原因：' + data.msg);
             }
@@ -45,3 +127,6 @@ function saveNewProduct() {
             alert('傳送失敗，請重試');
         });
 }
+</script>
+</body>
+</html>
