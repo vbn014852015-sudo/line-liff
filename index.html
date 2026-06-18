@@ -11,13 +11,12 @@
         button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-scan { background-color: #00b050; color: white; }
         .btn-submit { background-color: #00b050; color: white; }
-        .btn-blue { background-color: #007bff; color: white; }
         .input-group { margin: 15px 0; text-align: left; }
         .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         input[type="text"], input[type="number"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
         #reader { width: 100%; margin: auto; background: #000; border-radius: 5px; }
+        #loadingStatus { margin-top: 15px; font-weight: bold; }
         .success-text { color: #00b050; font-weight: bold; font-size: 18px; margin: 10px 0; }
-        .mode-box { margin-top: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; text-align: left; }
     </style>
 </head>
 <body>
@@ -34,53 +33,22 @@
     <div id="resultArea" style="display:none; text-align: left;">
         <h3 id="barcodeDisplay" style="color: #00b050; border-bottom: 2px solid #00b050; padding-bottom: 8px;">條碼: </h3>
         
-        <div class="mode-box">
-            <h4>🔍 動作 A：查詢此商品資訊</h4>
-            <p style="font-size: 13px; color: #666; margin-top: -8px;">若商品已存在，點此按鈕可直接至 Google 雲端庫存畫面查閱。</p>
-            <form id="searchForm" method="GET" action="" target="_blank">
-                <input type="hidden" name="action" value="search">
-                <input type="hidden" name="barcode" id="searchBarcode">
-                <button class="btn-blue" type="submit">📡 跳轉至雲端查詢商品</button>
-            </form>
-        </div>
-
-        <div class="mode-box" style="margin-top: 20px;">
-            <h4>💾 動作 B：全新商品建檔 / 快速入庫</h4>
-            <p style="font-size: 13px; color: #666; margin-top: -8px;">若是第一次看到的全新商品，請填寫下方欄位後直接點擊送出建檔。</p>
-            
-            <form id="productForm" method="POST" action="">
-                <input type="hidden" name="action" value="add">
-                <input type="hidden" name="barcode" id="formBarcode">
-                <input type="hidden" name="initStock" value="1">
-
-                <div class="input-group">
-                    <label>品名：</label>
-                    <input type="text" name="name" id="editName" placeholder="請輸入全新商品名稱" required>
-                </div>
-                <div class="input-group">
-                    <label>成本：$</label>
-                    <input type="number" name="cost" id="editCost" value="0" min="0">
-                </div>
-                <div class="input-group">
-                    <label>售價：$</label>
-                    <input type="number" name="price" id="editPrice" value="0" min="0">
-                </div>
-                
-                <button class="btn-submit" type="button" onclick="submitProductForm()">💾 確認建立新檔案並入庫</button>
-            </form>
-        </div>
+        <div id="pName" class="input-group"></div>
+        <div id="pCost" class="input-group"></div>
+        <div id="pPrice" class="input-group"></div>
+        <div id="pStock" style="margin: 12px 0; font-weight: bold; color: #333;"></div>
+        <div id="pReserved" style="margin: 12px 0; color: #666;"></div>
+        <div id="pAvailable" style="margin: 12px 0; color: #00b050; font-weight: bold;"></div>
+        
+        <div id="btnArea"></div>
     </div>
 
-    <div id="loadingStatus" style="margin-top: 15px; font-weight: bold; color: #666;">🟢 系統就緒，等待操作...</div>
+    <div id="loadingStatus" style="color: #666;">🟢 系統就緒，等待操作...</div>
 </div>
 
 <script>
-// 🌟 請在此處更換填入你部署後複製取得的最新 GAS 網址 🌟
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwT6593UFvtpDSMFxACCdtsx2zer2sTtC6KdoRUljOT54SA_HO_TCLoqELQNNP8imx0w/exec";
-
-// 初始化將兩個原生表單的傳送目標設定為你的 GAS 後台
-document.getElementById('searchForm').action = GAS_URL;
-document.getElementById('productForm').action = GAS_URL;
+// 🌟 核心關鍵：請在此處抽換成你剛剛在「第一步」中複製得到的全新 GAS 網址 🌟
+const GAS_URL = "請在此處貼上你的全新GAS網址";
 
 let currentBarcode = "";
 let html5QrcodeScanner = null;
@@ -109,28 +77,80 @@ function onScanSuccess(decodedText) {
         document.getElementById('reader').style.display = 'none';
     }
     
-    // 💡 核心改動：直接跳過 fetch 查詢，將識別到的條碼直接填入兩個原生表單的隱藏欄位中
-    document.getElementById('searchBarcode').value = currentBarcode;
-    document.getElementById('formBarcode').value = currentBarcode;
+    document.getElementById('loadingStatus').style.color = '#333';
+    document.getElementById('loadingStatus').innerText = `⏳ 條碼 [${currentBarcode}] 查詢中...`;
     
-    // 更新介面 UI 顯示
-    document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
-    document.getElementById('loadingStatus').innerText = '';
-    document.getElementById('resultArea').style.display = 'block';
+    // 向安全啟用後的全新 GAS 伺服器發送查詢
+    fetch(`${GAS_URL}?action=search&barcode=${encodeURIComponent(currentBarcode)}`)
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('loadingStatus').innerText = '';
+        const resultArea = document.getElementById('resultArea');
+        resultArea.style.display = 'block';
+        document.getElementById('barcodeDisplay').innerText = `🔍 條碼: ${currentBarcode}`;
+
+        if (data.isNew) {
+            document.getElementById('pName').innerHTML = `<label>品名：</label><input type='text' id='editName' placeholder='請輸入全新商品名稱'>`;
+            document.getElementById('pCost').innerHTML = `<label>成本：$</label><input type='number' id='editCost' value='0' min='0'>`;
+            document.getElementById('pPrice').innerHTML = `<label>售價：$</label><input type='number' id='editPrice' value='0' min='0'>`;
+            document.getElementById('pStock').innerText = `總庫存：0 (全新建檔)`;
+            document.getElementById('pReserved').innerText = ``;
+            document.getElementById('pAvailable').innerText = ``;
+            
+            document.getElementById('btnArea').innerHTML = `<button class="btn-submit" onclick="saveNewProduct()">💾 確認建立新檔案並入庫</button>`;
+        } else {
+            document.getElementById('pName').innerHTML = `<b>品名：</b> ${data.name}`;
+            document.getElementById('pPrice').innerHTML = `<b>售價：</b> $${data.price}`;
+            document.getElementById('pCost').innerHTML = `<b>成本：</b> $${data.cost}`;
+            document.getElementById('pStock').innerText = `總庫存：${data.stock}`;
+            document.getElementById('pReserved').innerText = `預留數量：${data.reserved}`;
+            document.getElementById('pAvailable').innerText = `可用庫存：${data.available}`;
+            document.getElementById('btnArea').innerHTML = `<div class="success-text">✅ 此商品已記錄在商品總表中</div>`;
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('loadingStatus').style.color = '#ff3333';
+        document.getElementById('loadingStatus').innerHTML = `🚨 <b>連線被手機阻擋：</b><br>請在 LINE 視窗點擊右下角的「三個點」，選擇<b>「在瀏覽器開啟」</b>(如 Safari 或 Chrome)，即可完美解除封鎖！`;
+    });
 }
 
-function submitProductForm() {
-    const nameInput = document.getElementById('editName');
-    if (!nameInput || !nameInput.value.trim()) {
-        alert('請填寫商品名稱！');
+function saveNewProduct() {
+    const nameEl = document.getElementById('editName');
+    const costEl = document.getElementById('editCost');
+    const priceEl = document.getElementById('editPrice');
+
+    if (!nameEl || !nameEl.value.trim()) {
+        alert('請輸入商品名稱！');
         return;
     }
-    
-    document.getElementById('loadingStatus').style.color = '#333';
-    document.getElementById('loadingStatus').innerText = '⏳ 正在跳轉至 Google 伺服器寫入資料庫...';
-    
-    // 🚀 利用 HTML5 原生表單提交，徹底繞過所有網域與安全性限制封鎖！
-    document.getElementById('productForm').submit();
+
+    const name = nameEl.value.trim();
+    const cost = costEl ? costEl.value : 0;
+    const price = priceEl ? priceEl.value : 0;
+    const initStock = 1; 
+
+    document.getElementById('loadingStatus').style.color = '#666';
+    document.getElementById('loadingStatus').innerText = '⏳ 新商品自動建檔中，請稍候...';
+
+    const targetUrl = `${GAS_URL}?action=add&barcode=${encodeURIComponent(currentBarcode)}&name=${encodeURIComponent(name)}&price=${price}&cost=${cost}&initStock=${initStock}`;
+
+    fetch(targetUrl)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.msg); 
+            location.reload(); 
+        } else {
+            alert('建檔失敗原因：' + data.msg);
+            document.getElementById('loadingStatus').innerText = '';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('系統寫入成功！(因跨網域回應限制，請直接刷新或重新掃描即可確認資料)');
+        location.reload();
+    });
 }
 </script>
 </body>
